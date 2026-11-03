@@ -438,7 +438,7 @@ export class Gemma3Runner {
     const maskData = new Float32Array(this.maxSeqLen * this.maxSeqLen).fill(-1e9);
     for (let i = 0; i < this.maxSeqLen; ++i) {
       for (let j = 0; j <= i; ++j) {
-        if (i < seqLen && j < seqLen) {
+        if (i < effectiveSeqLen && j < effectiveSeqLen) {
           maskData[i * this.maxSeqLen + j] = 0.0;
         }
       }
@@ -452,7 +452,7 @@ export class Gemma3Runner {
       writeGpuInput(this.device, this.runner.getInputWebGpuBuffer("prefill", "rope_local_cos"), localCosData, this.litert);
       writeGpuInput(this.device, this.runner.getInputWebGpuBuffer("prefill", "rope_local_sin"), localSinData, this.litert);
       writeGpuInput(this.device, this.runner.getInputWebGpuBuffer("prefill", "start_indices"), new Int32Array([0, 0, 0, 0]), this.litert);
-      writeGpuInput(this.device, this.runner.getInputWebGpuBuffer("prefill", "prefill_slice_index"), new Int32Array([seqLen - 1]), this.litert);
+      writeGpuInput(this.device, this.runner.getInputWebGpuBuffer("prefill", "prefill_slice_index"), new Int32Array([effectiveSeqLen - 1]), this.litert);
       writeGpuInput(this.device, this.runner.getInputWebGpuBuffer("prefill", "attention_mask"), maskData, this.litert);
 
       this.device.pushErrorScope('validation');
@@ -465,7 +465,7 @@ export class Gemma3Runner {
       this.runner.setInputBinary("prefill", "rope_local_cos", localCosData);
       this.runner.setInputBinary("prefill", "rope_local_sin", localSinData);
       this.runner.setInputBinary("prefill", "start_indices", new Int32Array([0, 0, 0, 0]));
-      this.runner.setInputBinary("prefill", "prefill_slice_index", new Int32Array([seqLen - 1]));
+      this.runner.setInputBinary("prefill", "prefill_slice_index", new Int32Array([effectiveSeqLen - 1]));
       this.runner.setInputBinary("prefill", "attention_mask", maskData);
     }
     
@@ -538,7 +538,7 @@ export class Gemma3Runner {
 
     console.log(`[Prefill] nextToken=${nextToken}`);
     
-    this.cacheLen = seqLen;
+    this.cacheLen = effectiveSeqLen;
     return nextToken;
   }
   
