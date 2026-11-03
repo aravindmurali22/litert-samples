@@ -81,13 +81,20 @@ class PitchDetector(modelFile: java.io.File, accelerator: Accelerator) : Closeab
         num += act[i].toDouble() * i
         den += act[i].toDouble()
       }
-      val cents = CENTS_PER_BIN * (num / den) + CENTS_OFFSET
+      val binCenter = if (den > 0.0) num / den else c.toDouble()
+      val cents = CENTS_PER_BIN * binCenter + CENTS_OFFSET
       val hz = (10.0 * Math.pow(2.0, cents / 1200.0)).toFloat()
       return toNote(hz, act[c])
     }
 
     private fun toNote(hz: Float, confidence: Float): Pitch {
+      if (hz <= 0f || !hz.isFinite()) {
+        return Pitch(0f, confidence, "C", 0, 0)
+      }
       val midi = 69.0 + 12.0 * log2(hz / 440.0)
+      if (!midi.isFinite()) {
+        return Pitch(hz, confidence, "C", 0, 0)
+      }
       val nearest = midi.roundToInt()
       val centsOff = ((midi - nearest) * 100).roundToInt()
       val name = NOTE_NAMES[((nearest % 12) + 12) % 12]

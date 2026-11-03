@@ -304,9 +304,10 @@ private class CmganTask(directory: File, preferred: String) : AudioTaskEngine {
     val enhanced = wrapper.enhance(original) { _, _ -> }
     val waves =
       listOf(NamedWaveform("Before", original, 16000), NamedWaveform("Enhanced", enhanced, 16000))
+    val peak = enhanced.maxOfOrNull { abs(it) } ?: 0f
     return AudioTaskOutput(
       "Enhanced ${number(enhanced.size / 16000.0)} s · " +
-        "peak ${number(enhanced.maxOf { abs(it) }.toDouble(), 4)}",
+        "peak ${number(peak.toDouble(), 4)}",
       waves,
       mapOf("waveforms" to waves.map(::waveMetrics)),
       elapsed(started),

@@ -163,12 +163,17 @@ size_t NumElements(const LiteRtLayout& layout) {
 void ResizeInputTensor(JNIEnv* env, jclass /*clazz*/, jobject compiled_model,
                        jint signature_index, jint input_index,
                        jintArray dims) {
+  LiteRtCompiledModel model = GetModel(env, compiled_model);
+  if (model == nullptr) {
+    ThrowRuntimeException(env, "ResizeInputTensor(null model)", -1);
+    return;
+  }
   LiteRtLayout layout = {};
   if (!ReadShape(env, dims, &layout)) {
     return;
   }
   const LiteRtStatus status = resize_input_tensor(
-      GetModel(env, compiled_model),
+      model,
       static_cast<LiteRtParamIndex>(signature_index),
       static_cast<LiteRtParamIndex>(input_index), layout.dimensions,
       static_cast<size_t>(layout.rank));
@@ -180,13 +185,18 @@ void ResizeInputTensor(JNIEnv* env, jclass /*clazz*/, jobject compiled_model,
 jobjectArray UpdateOutputLayouts(JNIEnv* env, jclass /*clazz*/,
                                  jobject compiled_model, jint signature_index,
                                  jint output_count) {
+  LiteRtCompiledModel model = GetModel(env, compiled_model);
+  if (model == nullptr) {
+    ThrowRuntimeException(env, "UpdateOutputLayouts(null model)", -1);
+    return nullptr;
+  }
   LiteRtLayout layouts[16] = {};
   if (output_count < 0 || output_count > 16) {
     ThrowRuntimeException(env, "UpdateOutputLayouts(output_count)", -1);
     return nullptr;
   }
   const LiteRtStatus status = get_output_tensor_layouts(
-      GetModel(env, compiled_model),
+      model,
       static_cast<LiteRtParamIndex>(signature_index),
       static_cast<size_t>(output_count), layouts, /*update_allocation=*/true);
   if (status != 0) {
@@ -213,7 +223,15 @@ jobjectArray RunDynamic(JNIEnv* env, jclass /*clazz*/, jobject compiled_model,
                         jint signature_index, jobjectArray input_data,
                         jobjectArray input_shapes, jobjectArray output_shapes) {
   LiteRtCompiledModel model = GetModel(env, compiled_model);
+  if (model == nullptr) {
+    ThrowRuntimeException(env, "RunDynamic(null model)", -1);
+    return nullptr;
+  }
   const jsize num_inputs = env->GetArrayLength(input_data);
+  if (env->GetArrayLength(input_shapes) != num_inputs) {
+    ThrowRuntimeException(env, "RunDynamic(input_shapes length mismatch)", -1);
+    return nullptr;
+  }
   const jsize num_outputs = env->GetArrayLength(output_shapes);
 
   std::vector<LiteRtTensorBuffer> buffers;
@@ -251,7 +269,17 @@ jobjectArray RunDynamic(JNIEnv* env, jclass /*clazz*/, jobject compiled_model,
       return nullptr;
     }
 
-    const size_t bytes = NumElements(tensor_type.layout) * sizeof(float);
+    const size_t num_elems = NumElements(tensor_type.layout);
+    const size_t bytes = num_elems * sizeof(float);
+    jfloatArray data = static_cast<jfloatArray>(
+        env->GetObjectArrayElement(input_data, i));
+    if (data == nullptr ||
+        static_cast<size_t>(env->GetArrayLength(data)) < num_elems) {
+      destroy_all();
+      ThrowRuntimeException(env, "RunDynamic(input_data too small)", -1);
+      return nullptr;
+    }
+
     LiteRtTensorBuffer buffer = nullptr;
     status = create_managed_tensor_buffer(litert_env, kBufferTypeHostMemory,
                                           &tensor_type, bytes, &buffer);
@@ -262,8 +290,6 @@ jobjectArray RunDynamic(JNIEnv* env, jclass /*clazz*/, jobject compiled_model,
     }
     buffers.push_back(buffer);
 
-    jfloatArray data = static_cast<jfloatArray>(
-        env->GetObjectArrayElement(input_data, i));
     void* host_memory = nullptr;
     status = lock_tensor_buffer(buffer, &host_memory, kLockModeWrite);
     if (status != 0) {
@@ -271,7 +297,7 @@ jobjectArray RunDynamic(JNIEnv* env, jclass /*clazz*/, jobject compiled_model,
       ThrowRuntimeException(env, "LiteRtLockTensorBuffer", status);
       return nullptr;
     }
-    env->GetFloatArrayRegion(data, 0, static_cast<jsize>(bytes / sizeof(float)),
+    env->GetFloatArrayRegion(data, 0, static_cast<jsize>(num_elems),
                              static_cast<jfloat*>(host_memory));
     unlock_tensor_buffer(buffer);
   }

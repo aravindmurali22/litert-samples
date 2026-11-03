@@ -132,10 +132,11 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
           val app = getApplication<Application>()
           val loaded = store.sideLoad(entry, app.getExternalFilesDir(null))
           loaded.skipped.forEach { Log.w(TAG, "side-load skipped: $it") }
-          if (store.inspect(entry).status != DownloadStatus.READY) {
+          val inspected = store.inspect(entry)
+          if (inspected.status != DownloadStatus.READY) {
             val free = StatFs(app.filesDir.path).availableBytes
-            val missing = entry.totalBytes - store.inspect(entry).receivedBytes
-            if (!DownloadSafety.hasSpace(missing, free)) {
+            val missing = entry.totalBytes - inspected.receivedBytes
+            if (missing > 0 && !DownloadSafety.hasSpace(missing, free)) {
               _ui.update {
                 it.copy(
                   model =

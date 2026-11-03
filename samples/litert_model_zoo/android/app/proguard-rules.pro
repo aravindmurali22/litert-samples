@@ -35,5 +35,6 @@
 -keep,allowoptimization,allowobfuscation class com.google.ai.edge.examples.litert_model_zoo.models.crowdcount.** { *; }
 -keep,allowoptimization,allowobfuscation class com.google.ai.edge.examples.litert_model_zoo.models.dinov2.** { *; }
 -keep,allowoptimization,allowobfuscation class com.google.ai.edge.examples.litert_model_zoo.models.xfeat.** { *; }
+-keep,allowoptimization,allowobfuscation class com.google.ai.edge.examples.litert_model_zoo.models.typed_decisions.** { *; }
 
 # The catalog uses org.json, not kotlinx.serialization; no reflective serialization rules are needed.

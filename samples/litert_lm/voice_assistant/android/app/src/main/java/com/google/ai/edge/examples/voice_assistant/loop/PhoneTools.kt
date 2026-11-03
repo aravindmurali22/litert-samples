@@ -282,7 +282,7 @@ private val SECONDS = Regex("(:\\d{2}):\\d{2}(\\.\\d+)?$")
  */
 class CalendarTool(private val context: Context) {
   // Strict: a lenient format reads "73:00" as 01:00 three days later and "2026-02-30" as March 2.
-  private val fmtMin = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply { isLenient = false }
+  private fun fmtMin() = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply { isLenient = false }
 
   val read: VoiceTool =
     object : VoiceTool {
@@ -348,6 +348,7 @@ class CalendarTool(private val context: Context) {
         CalendarContract.Instances.EVENT_LOCATION,
       )
     val rows = JSONArray()
+    val formatter = fmtMin()
     context.contentResolver
       .query(
         uri,
@@ -361,8 +362,8 @@ class CalendarTool(private val context: Context) {
           val row =
             JSONObject()
               .put("title", c.getString(0) ?: "")
-              .put("start", fmtMin.format(Date(c.getLong(1))))
-              .put("end", fmtMin.format(Date(c.getLong(2))))
+              .put("start", formatter.format(Date(c.getLong(1))))
+              .put("end", formatter.format(Date(c.getLong(2))))
               .put("location", c.getString(3) ?: "")
           rows.put(row)
         }
@@ -399,7 +400,7 @@ class CalendarTool(private val context: Context) {
    */
   internal fun parseMinute(s: String): Long {
     val t = s.trim().replace('T', ' ').replace(SECONDS, "$1")
-    return parseWhole(fmtMin, t)?.time
+    return parseWhole(fmtMin(), t)?.time
       ?: throw IllegalArgumentException("bad time '$s' (use YYYY-MM-DD HH:MM)")
   }
 

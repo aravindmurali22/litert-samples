@@ -74,12 +74,12 @@ internal constructor(private val mel: FloatArray, private val win: FloatArray) {
 
     // reflect-padded sample fetch: q<0 -> pcm[-q-1], q>=n -> pcm[2n-1-q]
     fun sample(p: Int): Float {
-      val q = p - PAD
-      return when {
-        q < 0 -> pcm[-q - 1]
-        q < n -> pcm[q]
-        else -> pcm[2 * n - 1 - q]
+      if (n == 0) return 0f
+      var q = p - PAD
+      while (q < 0 || q >= n) {
+        q = if (q < 0) -q - 1 else 2 * n - 1 - q
       }
+      return pcm[q]
     }
 
     for (t in 0 until nFrames) {
