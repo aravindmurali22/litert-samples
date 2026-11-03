@@ -40,13 +40,20 @@ Matcha-LJSpeech is trained on espeak en-us IPA, but espeak is GPL. The clean rep
 ## Build & run
 
 ```bash
+# CPU / GPU build:
 cd kotlin_cpu_gpu/android
 ./gradlew :app:installDebug
 # the four .tflite graphs are pushed to the app's filesDir (too big to bundle):
 ./install_to_device.sh <dir-with-the-tflites>
+
+# Or NPU + GPU + CPU build (with optional QNN HTP libraries):
+cd kotlin_npu/android
+./fetch_qualcomm_library.sh
+./gradlew :app:installDebug -Pnpu.libs="$(pwd)/qnn_libs"
+./install_to_device.sh <dir-with-the-tflites>
 ```
 
-Get the `.tflite` files from Hugging Face ([`litert-community/Matcha-TTS`](https://huggingface.co/litert-community/Matcha-TTS)) or build them with [`conversion/`](conversion/). The host tables (`emb.bin`, `g2p_dict.txt.gz`, `config.json`, `g2p_meta.json`) are bundled in the app assets. The first launch shows "model not found" until the install script has run.
+Get the `.tflite` files from Hugging Face ([`litert-community/Matcha-TTS`](https://huggingface.co/litert-community/Matcha-TTS)) or build them with [`conversion/`](conversion/). The host tables (`emb.bin`, `g2p_dict.txt.gz`, `config.json`, `g2p_meta.json`) are bundled in the app assets. The first launch shows "model not found" until the install script has run. In `kotlin_npu/android`, you can switch between `GPU`, `CPU`, and `NPU` (`BuiltinNpuAcceleratorProvider` / `Accelerator.NPU`) directly in the UI.
 
 ## App architecture
 
