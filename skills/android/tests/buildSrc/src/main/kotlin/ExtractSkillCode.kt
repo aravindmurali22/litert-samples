@@ -49,7 +49,7 @@ abstract class ExtractSkillCode : DefaultTask() {
 
     @TaskAction
     fun extract() {
-        val importLine = Regex("^import\\s+[\\w.]+(\\s+as\\s+\\w+)?$")
+        val importLine = Regex("^import\\s+[\\w.*]+(\\s+as\\s+\\w+)?$")
         val blocks =
             sources.files.flatMap { file ->
                 codeBlocks(file.readText().replace("\r\n", "\n")).filter { block ->

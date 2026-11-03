@@ -8,6 +8,7 @@ import com.google.ai.edge.litert.TensorType
 import com.google.ai.edge.litert.support.image.TensorImage
 import com.google.ai.edge.litert.support.tensorbuffer.TensorBuffer as SupportTensorBuffer
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import org.tensorflow.lite.DataType
 
 /**
@@ -74,7 +75,7 @@ class SupportBridge(model: CompiledModel, inputName: String, outputName: String)
         }
         when (dataType) {
             DataType.FLOAT32 -> tensor.loadArray(output.readFloat())
-            DataType.UINT8 -> tensor.loadBuffer(ByteBuffer.wrap(output.readInt8()))
+            DataType.UINT8 -> tensor.loadBuffer(ByteBuffer.wrap(output.readInt8()).order(ByteOrder.nativeOrder()))
             else -> throw IllegalArgumentException(
                 "SupportBridge handles FLOAT32 and UINT8; got $dataType"
             )

@@ -87,9 +87,13 @@ object TensorModelLoader {
     val npuError: String?,
     private val environment: Environment?,
   ) : AutoCloseable {
+    @Volatile private var closed = false
+
     override fun close() {
-      model.close()
-      environment?.close()
+      if (closed) return
+      closed = true
+      runCatching { model.close() }
+      runCatching { environment?.close() }
     }
   }
 
@@ -117,12 +121,12 @@ object TensorModelLoader {
         val elapsed = SystemClock.elapsedRealtime() - start
         return report(Loaded(model, Path.NPU, elapsed, null, environment))
       } catch (e: CancellationException) {
-        environment?.close()
+        runCatching { environment?.close() }
         throw e
-      } catch (e: Exception) {
-        environment?.close()
-        npuError = "${e.javaClass.simpleName}: ${e.message}"
-        Log.w(LOG_TAG, "Google Tensor TPU path failed; using the CPU model.", e)
+      } catch (t: Throwable) {
+        runCatching { environment?.close() }
+        npuError = "${t.javaClass.simpleName}: ${t.message}"
+        Log.w(LOG_TAG, "Google Tensor TPU path failed; using the CPU model.", t)
       }
     } else {
       npuError = "not a packaged Google Tensor device (SoC: ${Build.SOC_MODEL})"

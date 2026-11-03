@@ -909,7 +909,7 @@ def tree_text(root: pathlib.Path) -> str:
       return f"-> <app module>/{APP_QUICK_TEST_DIR}/ (optional quick test)"
     return TREE_NOTES.get(f)
 
-  width = max(len(f) for f in files if note(f)) + 2
+  width = max((len(f) for f in files if note(f)), default=0) + 2
   return "\n".join(f"{f:<{width}}{note(f)}" if note(f) else f for f in files)
 
 
@@ -2941,7 +2941,7 @@ def check_integration(pkg: dict, project: dict, args: argparse.Namespace,
       inside = pathlib.PurePosixPath(entry["packed_as"]).relative_to(
           QUICK_TEST_DIR)
       if not same(folder / entry["packed_as"],
-                  app_dir / APP_QUICK_TEST_DIR / inside):
+                  app_dir / APP_QUICK_TEST_DIR / pathlib.Path(inside)):
         gaps.append(entry["soc"])
     has_block = QUICK_TEST_PROPERTY in text
     if gaps or not has_block:

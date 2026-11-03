@@ -49,14 +49,16 @@ class MigrationValidationTest {
             modelAssetPath,
             CompiledModel.Options(Accelerator.CPU)
         ).use { model ->
-            val inputs = model.createInputBuffers()
-            val outputs = model.createOutputBuffers()
+            var inputs = emptyList<com.google.ai.edge.litert.TensorBuffer>()
+            var outputs = emptyList<com.google.ai.edge.litert.TensorBuffer>()
             try {
+                inputs = model.createInputBuffers()
+                outputs = model.createOutputBuffers()
                 inputs[0].writeFloat(fixedInput)
                 model.run(inputs, outputs)
                 outputs[0].readFloat()
             } finally {
-                (inputs + outputs).forEach { it.close() }
+                (inputs + outputs).forEach { runCatching { it.close() } }
             }
         }
 

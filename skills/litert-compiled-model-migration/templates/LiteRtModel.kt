@@ -11,6 +11,7 @@ import com.google.ai.edge.litert.CompiledModel
 import com.google.ai.edge.litert.Environment
 import com.google.ai.edge.litert.LiteRtException
 import com.google.ai.edge.litert.TensorBuffer
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,6 +53,7 @@ class LiteRtModel private constructor(
     val accelerator: Accelerator
     private val inputs: List<TensorBuffer>
     private val outputs: List<TensorBuffer>
+    private val closed = AtomicBoolean(false)
 
     init {
         val useNpu = wantNpu && BuiltinNpuAcceleratorProvider(context).isDeviceSupported()
@@ -124,32 +126,38 @@ class LiteRtModel private constructor(
     fun runSync(input: FloatArray): FloatArray = runBlocking { run(input) }
 
     override fun close() {
-        inputs.forEach { it.close() }
-        outputs.forEach { it.close() }
+        if (!closed.compareAndSet(false, true)) return
+        inputs.forEach { runCatching { it.close() } }
+        outputs.forEach { runCatching { it.close() } }
         model.close()
     }
 
     companion object {
         private const val TAG = "LiteRtModel"
         private var sharedEnvironment: Environment? = null
+        private var sharedEnvironmentHasNpu: Boolean = false
 
         /**
          * The process-wide Environment; with the NPU provider, Environment.create sets the dispatch
          * and compiler-plugin dirs itself.
          */
         @Synchronized
-        private fun environment(context: Context, useNpu: Boolean): Environment =
-            sharedEnvironment ?: run {
-                val app = context.applicationContext
-                val env =
-                    if (useNpu) {
-                        Environment.create(app, BuiltinNpuAcceleratorProvider(app))
-                    } else {
-                        Environment.create(app)
-                    }
-                sharedEnvironment = env
-                env
+        private fun environment(context: Context, useNpu: Boolean): Environment {
+            val existing = sharedEnvironment
+            if (existing != null && (!useNpu || sharedEnvironmentHasNpu)) {
+                return existing
             }
+            val app = context.applicationContext
+            val env =
+                if (useNpu) {
+                    Environment.create(app, BuiltinNpuAcceleratorProvider(app))
+                } else {
+                    Environment.create(app)
+                }
+            sharedEnvironment = env
+            sharedEnvironmentHasNpu = useNpu
+            return env
+        }
 
         /**
          * Creates the model on a serial dispatcher of its own; create compiles the model, so call
