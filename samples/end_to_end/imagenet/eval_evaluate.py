@@ -128,12 +128,19 @@ class LiteRTImageClassifier:
             output_array = _read_output(
                 self._output_buffers[0], self._output_requirements
             )
-            probs = _softmax(output_array.reshape(-1))
+            raw_scores = output_array.reshape(-1)
+            if self._labels and raw_scores.size == len(self._labels) + 1:
+                raw_scores = raw_scores[1:]
+            probs = _softmax(raw_scores)
             topk = np.argsort(probs)[-5:][::-1]
             outputs.append(
                 [
                     {
-                        "label": self._labels[idx] if self._labels else str(idx),
+                        "label": (
+                            self._labels[idx]
+                            if self._labels and idx < len(self._labels)
+                            else str(idx)
+                        ),
                         "score": float(probs[idx]),
                     }
                     for idx in topk

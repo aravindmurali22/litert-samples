@@ -209,16 +209,20 @@ int main(int argc, char* argv[]) {
           preprocessed_height, preprocessed_buffer_id, num_channels)) {
     std::cerr << "Failed to preprocess input image for segmentation."
               << std::endl;
+    processor.DeleteOpenGLTexture(tex_id_orig);
+    processor.DeleteOpenGLBuffer(preprocessed_buffer_id);
     return 1;
   }
 
-    std::vector<float> preprocessed_buffer_data(
+  std::vector<float> preprocessed_buffer_data(
       preprocessed_width * preprocessed_height * num_channels);
   if (!processor.ReadBufferData(preprocessed_buffer_id, 0,
                                 preprocessed_width * preprocessed_height *
                                     num_channels * sizeof(float),
                                 preprocessed_buffer_data.data())) {
     std::cerr << "Failed to read preprocessed input SSBO." << std::endl;
+    processor.DeleteOpenGLTexture(tex_id_orig);
+    processor.DeleteOpenGLBuffer(preprocessed_buffer_id);
     return 1;
   }
   LITERT_ABORT_IF_ERROR(
@@ -267,6 +271,11 @@ int main(int argc, char* argv[]) {
                                       preprocessed_width, preprocessed_height,
                                       mask_buffer_ids)) {
     std::cerr << "Failed to deinterleave masks on CPU." << std::endl;
+    processor.DeleteOpenGLTexture(tex_id_orig);
+    processor.DeleteOpenGLBuffer(preprocessed_buffer_id);
+    for (GLuint id : mask_buffer_ids) {
+      processor.DeleteOpenGLBuffer(id);
+    }
     return 1;
   }
 
@@ -276,6 +285,11 @@ int main(int argc, char* argv[]) {
       out_blend_width, out_blend_height);
   if (!final_blended_ssbo_id) {
     std::cerr << "Failed to apply colored masks and blend." << std::endl;
+    processor.DeleteOpenGLTexture(tex_id_orig);
+    processor.DeleteOpenGLBuffer(preprocessed_buffer_id);
+    for (GLuint id : mask_buffer_ids) {
+      processor.DeleteOpenGLBuffer(id);
+    }
     return 1;
   }
 
@@ -284,6 +298,11 @@ int main(int argc, char* argv[]) {
   if (!processor.ReadBufferData(final_blended_ssbo_id, 0,
                                 final_blended_float_data.size() * sizeof(float),
                                 final_blended_float_data.data())) {
+    processor.DeleteOpenGLTexture(tex_id_orig);
+    processor.DeleteOpenGLBuffer(preprocessed_buffer_id);
+    for (GLuint id : mask_buffer_ids) {
+      processor.DeleteOpenGLBuffer(id);
+    }
     processor.DeleteOpenGLBuffer(final_blended_ssbo_id);
     std::cerr << "Failed to read blended image data from SSBO." << std::endl;
     return 1;

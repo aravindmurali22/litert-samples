@@ -27,48 +27,16 @@ from datasets import load_dataset
 import evaluate
 from tqdm import tqdm
 
+from imagenet_preprocessing import (
+    infer_input_size,
+    pick_preprocess_config,
+    preprocess_image,
+)
 import main as imagenet_main
 
 
 def _default_model_path() -> str:
   return os.path.join(os.getcwd(), "mobilenet_v2.tflite")
-
-
-def _preprocess_image(
-    image: Image.Image,
-    channels: int,
-    resize_size: int,
-    crop_height: int,
-    crop_width: int,
-    mean: np.ndarray,
-    std: np.ndarray,
-    resample: int,
-    channels_first: bool,
-) -> np.ndarray:
-  if channels != 3:
-    raise ValueError(f"Expected 3 channels, got {channels}")
-  if resize_size <= 0 or crop_height <= 0 or crop_width <= 0:
-    raise ValueError(
-        f"Invalid resize/crop size: resize={resize_size}, crop={crop_height}x{crop_width}"
-    )
-  image = image.convert("RGB")
-  width, height = image.size
-  if width < height:
-    new_width = resize_size
-    new_height = int(round(height * resize_size / width))
-  else:
-    new_height = resize_size
-    new_width = int(round(width * resize_size / height))
-  image = image.resize((new_width, new_height), resample)
-  left = int(round((new_width - crop_width) / 2.0))
-  top = int(round((new_height - crop_height) / 2.0))
-  image = image.crop((left, top, left + crop_width, top + crop_height))
-  array = np.asarray(image, dtype=np.int32)
-  array = array.astype(np.float32) / 255.0
-  array = (array - mean) / std
-  if channels_first:
-    return np.transpose(array, (2, 0, 1))
-  return array
 
 
 def _topk_indices(scores: np.ndarray, k: int) -> np.ndarray:
@@ -120,11 +88,11 @@ def main(argv: list[str]) -> int:
   signature_index = 0
   channels = 3
 
-  input_height, input_width, channels_first = imagenet_main._infer_input_size(
+  input_height, input_width, channels_first = infer_input_size(
       model, signature_index
   )
   preprocess_model_key = args.arch if args.arch else args.model
-  preprocess = imagenet_main._pick_preprocess_config(
+  preprocess = pick_preprocess_config(
       preprocess_model_key, input_height, input_width
   )
   layout = "NCHW" if channels_first else "NHWC"
@@ -158,13 +126,15 @@ def main(argv: list[str]) -> int:
   correct_top5 = 0
   total = 0
 
-  total_hint = len(dataset)
+  total_hint = (
+      min(len(dataset), args.max_samples) if args.max_samples else len(dataset)
+  )
   iterator = _iter_dataset(dataset, args.max_samples)
   for example in tqdm(iterator, total=total_hint, unit="img"):
     image = example["image"]
     label = int(example["label"]) + output_offset
 
-    input_array = _preprocess_image(
+    input_array = preprocess_image(
         image,
         channels,
         preprocess["resize_size"],

@@ -189,8 +189,8 @@ def preprocess_image(
     array = array.astype(np.float32) / 255.0
     array = (array - mean) / std
     if channels_first:
-        return np.transpose(array, (2, 0, 1))
-    return array
+        return np.ascontiguousarray(np.transpose(array, (2, 0, 1)))
+    return np.ascontiguousarray(array)
 
 
 def load_image(

@@ -62,7 +62,8 @@ ABSL_FLAG(std::string, accelerator, "cpu",
           "cpu,gpu,npu). Will delegate to NPU, GPU, then CPU if they are "
           "specified in this flag.");
 ABSL_FLAG(int, sequence_length, 0,
-          "Number of threads to use for CPU inference.");
+          "Sequence length for input token padding/truncation (inferred from "
+          "model filename if 0).");
 ABSL_FLAG(std::string, dispatch_library_dir, "",
           "Path to the dispatch library directory.");
 
@@ -88,41 +89,62 @@ namespace {
 /**
  * @brief Parses the sequence length from the embedder model filename.
  *
- * Assumes the filename contains a pattern like "<number>_input_seq".
+ * Assumes the filename contains a pattern like "<number>_input_seq" or
+ * "<number>_seq" or "_seq<number>".
  *
  * @param embedder_path The file path to the embedder model.
  * @return The parsed sequence length, or an error status.
  */
 absl::StatusOr<int> GetSeqLenFromPath(const absl::string_view embedder_path) {
-  const size_t last_slash = embedder_path.find_last_of('/');
+  const size_t last_slash = embedder_path.find_last_of("/\\");
   const absl::string_view filename = (last_slash == absl::string_view::npos)
                                          ? embedder_path
                                          : embedder_path.substr(last_slash + 1);
 
-  const size_t seq_pos = filename.find("_input_seq");
+  size_t seq_pos = filename.find("_input_seq");
+  if (seq_pos == absl::string_view::npos) {
+    seq_pos = filename.find("_seq");
+  }
   if (seq_pos == absl::string_view::npos) {
     return absl::InvalidArgumentError(
-        "Embedder filename must contain '_input_seq' to infer sequence "
-        "length.");
+        "Embedder filename must contain '_input_seq' or '_seq' to infer "
+        "sequence length.");
   }
 
   size_t num_end = seq_pos;
   size_t num_start = num_end;
-  while (num_start > 0 && isdigit(filename[num_start - 1])) {
+  while (num_start > 0 &&
+         std::isdigit(static_cast<unsigned char>(filename[num_start - 1]))) {
     --num_start;
+  }
+
+  // Also support "_seq<number>" (e.g. "_seq128" or "_seq_128") if digits follow
+  if (num_start == num_end) {
+    size_t after_marker =
+        seq_pos +
+        (filename.substr(seq_pos).starts_with("_input_seq") ? 10 : 4);
+    if (after_marker < filename.size() && filename[after_marker] == '_') {
+      ++after_marker;
+    }
+    num_start = after_marker;
+    num_end = num_start;
+    while (num_end < filename.size() &&
+           std::isdigit(static_cast<unsigned char>(filename[num_end]))) {
+      ++num_end;
+    }
   }
 
   if (num_start == num_end) {
     return absl::InvalidArgumentError(
-        "Could not find sequence length number before '_input_seq' in "
-        "filename.");
+        "Could not find sequence length number in filename.");
   }
 
   int seq_len;
   if (!absl::SimpleAtoi(filename.substr(num_start, num_end - num_start),
-                        &seq_len)) {
+                        &seq_len) ||
+      seq_len < 2) {
     return absl::InvalidArgumentError(
-        "Failed to parse sequence length number.");
+        "Failed to parse valid sequence length (>= 2) from filename.");
   }
   return seq_len;
 }
@@ -155,8 +177,9 @@ float CosineSimilarity(const std::vector<float>& v1,
 void PreprocessTokens(
     sentencepiece::SentencePieceProcessor* tokenizer_processor,
     std::vector<int>* token_ids, const int seq_len) {
+  ABSL_QCHECK_GE(seq_len, 2) << "Sequence length must be at least 2.";
   // Truncate to max length.
-  const int max_len = seq_len - 2;
+  const size_t max_len = static_cast<size_t>(seq_len - 2);
   if (token_ids->size() > max_len) {
     token_ids->resize(max_len);
   }
@@ -166,7 +189,7 @@ void PreprocessTokens(
   token_ids->push_back(tokenizer_processor->eos_id());
 
   // Pad to sequence length.
-  const int num_padding = seq_len - token_ids->size();
+  const int num_padding = seq_len - static_cast<int>(token_ids->size());
   if (num_padding > 0) {
     token_ids->insert(token_ids->end(), num_padding,
                       tokenizer_processor->pad_id());
@@ -238,6 +261,9 @@ absl::Status RealMain() {
   int seq_len;
   if (absl::GetFlag(FLAGS_sequence_length) > 0) {
     seq_len = absl::GetFlag(FLAGS_sequence_length);
+    if (seq_len < 2) {
+      return absl::InvalidArgumentError("--sequence_length must be >= 2.");
+    }
   } else {
     absl::StatusOr<int> seq_len_or = GetSeqLenFromPath(embedder_path);
     if (!seq_len_or.ok()) {
@@ -259,7 +285,9 @@ absl::Status RealMain() {
   std::vector<litert::Environment::Option> environment_options = {};
   LITERT_ASSIGN_OR_RETURN(auto options, Options::Create());
   auto accelerator = GetAccelerator();
-  // Set CPU compilation options.
+  if (accelerator == litert::HwAccelerators::kNone) {
+    return absl::InvalidArgumentError("No supported accelerators specified.");
+  }
   if (accelerator & litert::HwAccelerators::kNpu) {
     if (!absl::GetFlag(FLAGS_dispatch_library_dir).empty()) {
       environment_options.push_back(litert::Environment::Option{
@@ -273,23 +301,18 @@ absl::Status RealMain() {
     qnn_opts.SetLogLevel(::litert::qualcomm::QualcommOptions::LogLevel::kOff);
     qnn_opts.SetHtpPerformanceMode(
         ::litert::qualcomm::QualcommOptions::HtpPerformanceMode::kBurst);
-    options.SetHardwareAccelerators(accelerator);
-    // Add other NPU options here..
-  } else if (accelerator & litert::HwAccelerators::kCpu) {
+  }
+  if (accelerator & litert::HwAccelerators::kCpu) {
     LITERT_ASSIGN_OR_RETURN(auto& cpu_compilation_options,
                             options.GetCpuOptions());
     LITERT_RETURN_IF_ERROR(cpu_compilation_options.SetNumThreads(4));
-    options.SetHardwareAccelerators(accelerator);
-    // Set GPU compilation options.
-  } else if (accelerator & litert::HwAccelerators::kGpu) {
+  }
+  if (accelerator & litert::HwAccelerators::kGpu) {
     LITERT_ASSIGN_OR_RETURN(auto& gpu_compilation_options,
                             options.GetGpuOptions());
     gpu_compilation_options.SetPrecision(GpuOptions::Precision::kFp32);
-
-    options.SetHardwareAccelerators(accelerator);
-  } else {
-    return absl::InvalidArgumentError("No supported accelerators specified.");
   }
+  options.SetHardwareAccelerators(accelerator);
 
   LITERT_ASSIGN_OR_RETURN(
       auto env, Environment::Create(absl::MakeConstSpan(environment_options)));
