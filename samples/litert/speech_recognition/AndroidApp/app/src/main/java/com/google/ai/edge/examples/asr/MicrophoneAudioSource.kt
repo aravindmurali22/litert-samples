@@ -93,7 +93,7 @@ class MicrophoneAudioSource(
       val rawBuffer = ShortArray(step)
       var numOfSamplesRead = 0
 
-      while (true) {
+      while (!isClosing) {
         // Read audio data into rawBuffer until we have 'step' samples.
         val readBytes = audioReader.read(rawBuffer, numOfSamplesRead, step - numOfSamplesRead)
         when {
@@ -140,7 +140,9 @@ class MicrophoneAudioSource(
     }
   }
 
-  override fun close() {}
+  override fun close() {
+    isClosing = true
+  }
 
   private companion object {
     const val MAX_16BIT_PCM_VALUE = 32768.0f

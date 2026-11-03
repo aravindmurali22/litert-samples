@@ -54,12 +54,13 @@ class ImageSuperResolutionHelper(private val context: Context) {
 
     /** Init a Interpreter from ESRGAN model.*/
     fun initClassifier(delegate: Delegate = Delegate.CPU) {
+        interpreter?.close()
         interpreter = try {
             val litertBuffer = FileUtil.loadMappedFile(context, "ESRGAN.tflite")
             Log.i(TAG, "Done creating TFLite buffer from ESRGAN model")
             val options = Interpreter.Options().apply {
                 numThreads = 4
-                useNNAPI = delegate == Delegate.CPU
+                useNNAPI = delegate == Delegate.NNAPI
             }
             Interpreter(litertBuffer, options)
         } catch (e: Exception) {

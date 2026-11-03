@@ -60,6 +60,7 @@ class TextClassificationHelper(private val context: Context) {
 
     /** Init a Interpreter from [model]. View Model enum here [Model]*/
     fun initClassifier(model: Model = Model.MobileBERT) {
+        interpreter?.close()
         interpreter = try {
             val litertBuffer = FileUtil.loadMappedFile(context, model.fileName)
             Log.i(TAG, "Done creating LiteRT buffer from ${model.fileName}")
@@ -123,6 +124,7 @@ class TextClassificationHelper(private val context: Context) {
         val metadataExtractor = MetadataExtractor(litertBuffer)
         if (metadataExtractor.hasMetadata()) {
             val vocalBuffer = metadataExtractor.getAssociatedFile("vocab.txt")
+            vocabularyMap.clear()
             vocabularyMap.putAll(getVocabulary(vocalBuffer))
             Log.i(TAG, "Successfully loaded model metadata")
         }
@@ -162,7 +164,14 @@ class TextClassificationHelper(private val context: Context) {
         var index = 0
         var line = ""
         while (reader.readLine().also { if (it != null) line = it } != null) {
-            map[line] = index
+            val trimmed = line.trim()
+            val parts = trimmed.split("\\s+".toRegex())
+            val parsedId = if (parts.size == 2) parts[1].toIntOrNull() else null
+            if (parsedId != null) {
+                map[parts[0]] = parsedId
+            } else {
+                map[line] = index
+            }
             index++
         }
 

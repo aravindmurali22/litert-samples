@@ -284,7 +284,7 @@ class MainActivity : ComponentActivity() {
                 },
                 onPlusClicked = {
                     if (threshold < 0.8f) {
-                        val newThreshold = threshold + 0.1f.coerceAtMost(0.8f)
+                        val newThreshold = (threshold + 0.1f).coerceAtMost(0.8f)
                         onThresholdSet(newThreshold)
                     }
                 },

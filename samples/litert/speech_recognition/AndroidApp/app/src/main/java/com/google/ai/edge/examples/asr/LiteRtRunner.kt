@@ -38,7 +38,7 @@ class LiteRtRunner(
 ) : SpeechRecognizer {
 
   /** Interface for decoding the ASR encoder output into token IDs. */
-  interface Decoder {
+  interface Decoder : AutoCloseable {
     /**
      * Decodes the encoder output buffers and returns the token IDs and their relative timestamps
      * (if available) as a sequence.
@@ -47,7 +47,16 @@ class LiteRtRunner(
      * @return The list of token IDs and their timestamps (if available) as a sequence.
      */
     fun decode(encodeOutputBuffers: List<TensorBuffer>): Sequence<Pair<Int, Int>>
+
+    override fun close() {}
   }
+
+  private val env: Environment =
+    if (accelerator == Accelerator.NPU) {
+      Environment.create(BuiltinNpuAcceleratorProvider(context))
+    } else {
+      Environment.create()
+    }
 
   private val compiledModel: CompiledModel =
     {
@@ -79,20 +88,19 @@ class LiteRtRunner(
           )
       }
 
-      val env =
-        if (accelerator == Accelerator.NPU) {
-          Environment.create(BuiltinNpuAcceleratorProvider(context))
-        } else {
-          Environment.create()
-        }
-
       val modelPath =
         if (accelerator == Accelerator.NPU) modelConfig.npuModelPath else modelConfig.modelPath
-      if (existsInAssets(context, modelPath)) {
-        CompiledModel.create(context.assets, modelPath, options, env)
-      } else {
-        val unused = openOrDownloadFile(context, modelPath, getRemoteUrl(accelerator, modelConfig))
-        CompiledModel.create("${context.filesDir.path}/${modelPath}", options, env)
+      try {
+        if (existsInAssets(context, modelPath)) {
+          CompiledModel.create(context.assets, modelPath, options, env)
+        } else {
+          val unused =
+            openOrDownloadFile(context, modelPath, getRemoteUrl(accelerator, modelConfig))
+          CompiledModel.create("${context.filesDir.path}/${modelPath}", options, env)
+        }
+      } catch (t: Throwable) {
+        runCatching { env.close() }
+        throw t
       }
     }()
 
@@ -104,7 +112,11 @@ class LiteRtRunner(
     compiledModel.getInputTensorType(inputBufferName(0), ENCODE_SIGNATURE).numElements
 
   override fun close() {
-    compiledModel.close()
+    runCatching { decoder.close() }
+    inputBuffers.forEach { runCatching { it.close() } }
+    outputBuffers.forEach { runCatching { it.close() } }
+    runCatching { compiledModel.close() }
+    runCatching { env.close() }
   }
 
   override fun recognize(features: FloatArray): Sequence<Pair<Int, Int>> {
@@ -125,6 +137,11 @@ class LiteRtRunner(
     private val tokenIdsBuffer = inputBuffers[inputBuffers.size - 2]
     private val maskBuffer = inputBuffers[inputBuffers.size - 1]
     private val outputBuffers = compiledModel.createOutputBuffers(DECODE_SIGNATURE)
+
+    override fun close() {
+      inputBuffers.forEach { runCatching { it.close() } }
+      outputBuffers.forEach { runCatching { it.close() } }
+    }
 
     private val numOfTokenIds =
       compiledModel

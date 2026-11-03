@@ -166,7 +166,7 @@ class ImageClassificationHelper(
     }
 
     private fun rot90Clockwise(image: Bitmap, numRotation: Int): Bitmap {
-        val effectiveRotation = numRotation % 4
+        val effectiveRotation = ((numRotation % 4) + 4) % 4
         if (effectiveRotation == 0) return image
         val matrix = android.graphics.Matrix()
         val (w, h) = Pair(image.width, image.height)
@@ -196,17 +196,21 @@ class ImageClassificationHelper(
     private fun classifyWithCompiledModel(inputFloatArray: FloatArray): FloatArray {
         val currentModel = model ?: return FloatArray(0)
         val inputBuffers = currentModel.createInputBuffers()
-        val outputBuffers = currentModel.createOutputBuffers()
+        val outputBuffers = try {
+            currentModel.createOutputBuffers()
+        } catch (t: Throwable) {
+            inputBuffers.forEach { runCatching { it.close() } }
+            throw t
+        }
 
-        inputBuffers[0].writeFloat(inputFloatArray)
-        currentModel.run(inputBuffers, outputBuffers)
-
-        val output = outputBuffers[0].readFloat()
-        
-        inputBuffers.forEach { it.close() }
-        outputBuffers.forEach { it.close() }
-        
-        return output
+        return try {
+            inputBuffers[0].writeFloat(inputFloatArray)
+            currentModel.run(inputBuffers, outputBuffers)
+            outputBuffers[0].readFloat()
+        } finally {
+            inputBuffers.forEach { runCatching { it.close() } }
+            outputBuffers.forEach { runCatching { it.close() } }
+        }
     }
 
 

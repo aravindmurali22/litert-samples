@@ -93,16 +93,22 @@ class DigitClassificationHelper(private val context: Context) {
 
                 // 2. Execution
                 val inputBuffers = localModel.createInputBuffers()
-                val outputBuffers = localModel.createOutputBuffers()
+                val outputBuffers = try {
+                    localModel.createOutputBuffers()
+                } catch (t: Throwable) {
+                    inputBuffers.forEach { runCatching { it.close() } }
+                    throw t
+                }
 
-                inputBuffers[0].writeFloat(inputFloatArray)
-                localModel.run(inputBuffers, outputBuffers)
-                
-                val outputFloatArray = outputBuffers[0].readFloat()
-
-                // Cleanup buffers
-                inputBuffers.forEach { it.close() }
-                outputBuffers.forEach { it.close() }
+                val outputFloatArray = try {
+                    inputBuffers[0].writeFloat(inputFloatArray)
+                    localModel.run(inputBuffers, outputBuffers)
+                    outputBuffers[0].readFloat()
+                } finally {
+                    // Cleanup buffers
+                    inputBuffers.forEach { runCatching { it.close() } }
+                    outputBuffers.forEach { runCatching { it.close() } }
+                }
 
                 // 3. Postprocessing
                 val (digit, score) = findResult(outputFloatArray)
