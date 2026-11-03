@@ -20,15 +20,22 @@ Pick a photo and type what to cut out: the app finds that one thing and saves it
      --local-dir "$HOME/Downloads/WeVisOne-VL-2B-LiteRT"
    ```
 
-2. With a phone connected over adb (USB debugging on; Gradle needs the Android SDK 35 and a JDK 17, or open `kotlin_gpu/android` in Android Studio), build and install the debug build, then copy the files into the app's private storage:
+2. With a phone connected over adb (USB debugging on; Gradle needs the Android SDK 35 and a JDK 17, or open `kotlin_gpu/android` / `kotlin_npu/android` in Android Studio), build and install the debug build, then copy the files into the app's private storage:
 
    ```bash
+   # GPU / CPU build:
    cd kotlin_gpu/android
    ./gradlew :app:installDebug
    ./install_to_device.sh
+
+   # Or NPU + GPU + CPU build (with optional QNN HTP libraries):
+   cd kotlin_npu/android
+   ./fetch_qualcomm_library.sh
+   ./gradlew :app:installDebug -Pnpu.libs="$(pwd)/qnn_libs"
+   ./install_to_device.sh
    ```
 
-   `install_to_device.sh` reads `~/Downloads/WeVisOne-VL-2B-LiteRT/cutout` unless you give it another directory. It checks every file's size before it copies anything and its SHA-256 on the phone after the copy, and it downloads three NASA example photos (`EXAMPLES=0` skips them). It copies with `run-as`, which needs the debug build. `FORM=fp16` installs the fp16 language model instead of the int8 one and `FORM=both` installs both; add `cutout/wevisone_decoder_b_fp16.tflite` to the download for them.
+   `install_to_device.sh` reads `~/Downloads/WeVisOne-VL-2B-LiteRT/cutout` unless you give it another directory. It checks every file's size before it copies anything and its SHA-256 on the phone after the copy, and it downloads three NASA example photos (`EXAMPLES=0` skips them). It copies with `run-as`, which needs the debug build. `FORM=fp16` installs the fp16 language model instead of the int8 one and `FORM=both` installs both; add `cutout/wevisone_decoder_b_fp16.tflite` to the download for them. In `kotlin_npu/android`, the language model menu also offers `LM: NPU (int8 weights, HTP)` and `LM: NPU (fp16 weights, HTP)` using `BuiltinNpuAcceleratorProvider` and `Accelerator.NPU`.
 
 3. Open **WeVisOne Cut-out**. Choose a photo (**Photos**, **Camera**, or **Example**, which also fills in a task and words), pick a task, type the words, tap **Run**. Boxes, points and labels appear on the photo and a cut-out is tinted; tap the photo to see the cut-out alone on a checkerboard. **Save PNG** writes it with its transparency to `Pictures/WeVisOne`.
 
