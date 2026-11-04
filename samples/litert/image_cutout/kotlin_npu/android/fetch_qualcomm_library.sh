@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-QUALCOMM_SDK_VERSION="${QUALCOMM_SDK_VERSION:-2.42.0.251225}"
+QUALCOMM_SDK_VERSION="${QUALCOMM_SDK_VERSION:-2.50.0.260828}"
 QNN_ZIP_URL="https://softwarecenter.qualcomm.com/api/download/software/sdks/Qualcomm_AI_Runtime_Community/All/${QUALCOMM_SDK_VERSION}/v${QUALCOMM_SDK_VERSION}.zip"
 DEST_DIR="${1:-$(pwd)/qnn_libs}"
 
@@ -35,6 +35,8 @@ QAIRT_ROOT="${TMP_DIR}/qairt/${QUALCOMM_SDK_VERSION}"
 cp "${QAIRT_ROOT}/lib/aarch64-android/libQnnHtp.so" "${DEST_DIR}/"
 cp "${QAIRT_ROOT}/lib/aarch64-android/libQnnSystem.so" "${DEST_DIR}/"
 cp "${QAIRT_ROOT}/lib/aarch64-android/libQnnHtpPrepare.so" "${DEST_DIR}/"
+cp "${QAIRT_ROOT}/lib/aarch64-android/libQnnIr.so" "${DEST_DIR}/"
+cp "${QAIRT_ROOT}/lib/aarch64-android/libQnnSaver.so" "${DEST_DIR}/"
 cp "${QAIRT_ROOT}/lib/aarch64-android/"libQnnHtpV*Stub.so "${DEST_DIR}/"
 cp "${QAIRT_ROOT}/lib/hexagon-v"*/unsigned/libQnnHtpV*Skel.so "${DEST_DIR}/"
 
